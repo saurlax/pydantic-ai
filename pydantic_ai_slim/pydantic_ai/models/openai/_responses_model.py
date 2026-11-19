@@ -164,7 +164,7 @@ from ._citations import (
     responses_citations_provider_details,
     responses_output_text_annotations_ta,
 )
-from ._deepseek_web_tools import web_tool_param, web_tool_parts, web_tool_replay
+from ._deepseek_web_tools import check_web_output, web_tool_param, web_tool_parts, web_tool_replay
 from ._errors import (
     check_azure_content_filter,
     is_azure,
@@ -516,6 +516,8 @@ class OpenAIResponsesModel(Model[AsyncOpenAI]):
         model_request_parameters: ModelRequestParameters,
     ) -> tuple[ModelSettings | None, ModelRequestParameters]:
         model_settings, model_request_parameters = super().prepare_request(model_settings, model_request_parameters)
+        if self.profile.get('openai_deepseek_web_tools', False):
+            check_web_output(model_request_parameters)
         model_settings = translate_openai_cache(self.profile, model_settings, model_request_parameters)
         if (
             model_settings is not None
