@@ -47,6 +47,7 @@ from ...messages import CompactionPart, ModelResponseStreamEvent, NativeToolCall
 from .. import StreamedResponse
 from .._decode_errors import MapStreamDecodeErrors
 from ._citations import citations_provider_details, fetched_page, map_citations
+from ._deepseek_web_tools import web_tool_part
 from ._errors import map_api_errors
 from ._native_tools import (
     finalize_streamed_tool_search_call_part,
@@ -94,6 +95,7 @@ class AnthropicStreamedResponse(StreamedResponse):
     _history_fetched_pages: Sequence[tuple[str, str]] = ()
     _report_inference_geo: bool = False
     _current_block: BetaContentBlock | None = field(default=None, init=False)
+    _deepseek_web_tools: bool = False
     _ignored_server_tool_use_indices: set[int] = field(default_factory=set[int], init=False)
     _pending_citations: dict[int, list[BetaTextCitation]] = field(
         default_factory=dict[int, list[BetaTextCitation]], init=False
@@ -134,7 +136,13 @@ class AnthropicStreamedResponse(StreamedResponse):
             # as `BetaRawMessageStartEvent(message=None)`. Skip them entirely so we
             # don't dereference `event.message.id` / `.container` below.
             return
-        self._usage = map_usage(event, self._provider_name, self._provider_url, self._model_name)
+        self._usage = map_usage(
+            event,
+            self._provider_name,
+            self._provider_url,
+            self._model_name,
+            deepseek_web_tools=self._deepseek_web_tools,
+        )
         self.provider_response_id = event.message.id
         if event.message.container:
             self.provider_details = self.provider_details or {}
@@ -162,6 +170,9 @@ class AnthropicStreamedResponse(StreamedResponse):
 
     def _map_content_block_start(self, event: BetaRawContentBlockStartEvent) -> Iterator[ModelResponseStreamEvent]:  # noqa: C901
         self._current_block = current_block = event.content_block
+        if self._deepseek_web_tools and (part := web_tool_part(current_block, self.provider_name)) is not None:
+            yield self._parts_manager.handle_part(vendor_part_id=event.index, part=part)
+            return
         match current_block:
             case BetaTextBlock() if current_block.text:
                 yield from self._parts_manager.handle_text_delta(vendor_part_id=event.index, content=current_block.text)
@@ -329,7 +340,14 @@ class AnthropicStreamedResponse(StreamedResponse):
                 pass
 
     def _map_message_delta(self, event: BetaRawMessageDeltaEvent) -> None:
-        self._usage = map_usage(event, self._provider_name, self._provider_url, self._model_name, self._usage)
+        self._usage = map_usage(
+            event,
+            self._provider_name,
+            self._provider_url,
+            self._model_name,
+            self._usage,
+            deepseek_web_tools=self._deepseek_web_tools,
+        )
         if (context_input_tokens := last_pass_input_tokens(event.usage)) is not None:
             mark_context_input_tokens(self, context_input_tokens)
         if raw_finish_reason := event.delta.stop_reason:  # pragma: no branch

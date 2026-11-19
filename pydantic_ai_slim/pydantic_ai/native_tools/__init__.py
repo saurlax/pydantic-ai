@@ -316,6 +316,7 @@ class WebSearchTool(AbstractNativeTool):
     Supported by:
 
     * Anthropic
+    * DeepSeek Flash
     * OpenAI Responses
     * Groq
     * Google
@@ -614,6 +615,7 @@ class WebFetchTool(AbstractNativeTool):
     Supported by:
 
     * Anthropic
+    * DeepSeek Flash
     * Google
     """
 
