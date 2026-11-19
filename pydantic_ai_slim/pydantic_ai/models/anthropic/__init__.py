@@ -305,7 +305,7 @@ try:
         without_unanswered_tool_calls,
     )
     from ._containers import is_tool_result_only
-    from ._deepseek_web_tools import web_tool_param, web_tool_part, web_tool_replay
+    from ._deepseek_web_tools import check_web_generation_error, web_tool_param, web_tool_part, web_tool_replay
     from ._errors import is_expired_container_error, map_api_errors, status_and_body
     from ._message_passes import (
         anchor_system_messages,
@@ -1381,6 +1381,8 @@ class AnthropicModel(Model[AsyncAnthropicClient]):
         response = check_json_response(self.model_name, response)
         code_execution_in_open_turn = open_turn_has_code_execution(messages, self.system)
         if isinstance(response, BetaMessage):
+            if self.profile.get('anthropic_deepseek_web_tools', False):
+                check_web_generation_error(response, self.model_name)
             return self._process_response(
                 response,
                 model_request_parameters,
